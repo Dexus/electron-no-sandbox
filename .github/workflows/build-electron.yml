@@ -1,0 +1,78 @@
+name: Build Electron 34 (v8 sandbox disabled)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-13, windows-latest]
+        arch: [x64, arm64]
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-latest
+          - os: macos-13
+            runner: macos-13
+          - os: windows-latest
+            runner: windows-latest
+
+    runs-on: ${{ matrix.runner }}
+    name: Build ${{ matrix.os }} / ${{ matrix.arch }}
+
+    steps:
+      - name: Checkout build-tools
+        uses: actions/checkout@v4
+        with:
+          repository: electron/build-tools
+          path: build-tools
+
+      - name: Setup environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang libgtk-3-dev libnss3-dev libxss-dev libasound2-dev libx11-dev libx11-xcb-dev libxcomposite-dev libxcursor-dev libxdamage-dev libxi-dev libxtst-dev libxrandr-dev libxinerama-dev libxext-dev libglib2.0-dev libpci-dev libdbus-1-dev libxt-dev
+
+      - name: Add depot_tools to PATH
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "${PWD}/depot_tools" >> $GITHUB_PATH
+
+      - name: Run e sync (Electron 34 branch)
+        working-directory: build-tools
+        run: |
+          ./e sync --branch 34-x-y
+
+      - name: Configure GN args
+        working-directory: build-tools/src
+        run: |
+          echo 'v8_enable_sandbox = false' >> out/Release/args.gn
+          echo 'is_debug = false' >> out/Release/args.gn
+          echo 'target_cpu = "${{ matrix.arch }}"' >> out/Release/args.gn
+          gn gen out/Release
+
+      - name: Build Electron
+        working-directory: build-tools
+        run: |
+          ./e build --out-dir=out/Release
+
+      - name: Package Electron binary
+        working-directory: build-tools
+        run: |
+          mkdir -p electron-artifacts/${{ matrix.os }}-${{ matrix.arch }}
+          cp src/out/Release/electron* electron-artifacts/${{ matrix.os }}-${{ matrix.arch }} || true
+
+      - name: Upload Electron Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-${{ matrix.os }}-${{ matrix.arch }}
+          path: build-tools/electron-artifacts/${{ matrix.os }}-${{ matrix.arch }}
