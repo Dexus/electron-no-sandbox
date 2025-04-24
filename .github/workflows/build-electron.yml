@@ -39,6 +39,7 @@ jobs:
       - name: Install BuildTools
         run: |
           npm i -g @electron/build-tools
+          e init --bootstrap 34-x-y
           
       - name: Install system dependencies (Linux only)
         if: matrix.os == 'ubuntu-latest'
