@@ -32,10 +32,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
+      - name: Install BuildTools
+        run: |
+          npm i -g @electron/build-tools
+          
       - name: Install system dependencies (Linux only)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -48,12 +52,11 @@ jobs:
           echo "${PWD}/depot_tools" >> $GITHUB_PATH
 
       - name: Run e sync (Electron 34 branch)
-        working-directory: build-tools
         run: |
-          ./e sync --branch 34-x-y
+          e sync --branch 34-x-y
 
       - name: Configure GN args
-        working-directory: build-tools/src
+        working-directory: src
         run: |
           echo 'v8_enable_sandbox = false' >> out/Release/args.gn
           echo 'is_debug = false' >> out/Release/args.gn
@@ -61,12 +64,10 @@ jobs:
           gn gen out/Release
 
       - name: Build Electron
-        working-directory: build-tools
         run: |
-          ./e build --out-dir=out/Release
+          e build --out-dir=out/Release
 
       - name: Package Electron binary
-        working-directory: build-tools
         run: |
           mkdir -p electron-artifacts/${{ matrix.os }}-${{ matrix.arch }}
           cp src/out/Release/electron* electron-artifacts/${{ matrix.os }}-${{ matrix.arch }} || true
