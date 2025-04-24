@@ -1,4 +1,4 @@
-name: Build Electron without V8 Sandbox
+name: Build Electron without V8 Sandbox (modern)
 
 on:
   workflow_dispatch:
@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: electron/electron
+          ref: main  # oder z. B. v27.3.0
           path: electron
 
       - name: Install dependencies
@@ -27,20 +28,26 @@ jobs:
           git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
           echo "${GITHUB_WORKSPACE}/depot_tools" >> $GITHUB_PATH
 
-      - name: Bootstrap Electron
-        working-directory: electron
+      - name: Install e (Electron CLI)
         run: |
-          python3 script/bootstrap.py -v
+          npm install -g @electron/packager
+          npm install -g @electron/electron
 
-      - name: Generate GN build config
+      - name: Sync Electron dependencies
         working-directory: electron
         run: |
-          gn gen out/Release --args='import("//electron/build/args/release.gn") v8_enable_sandbox=false is_debug=false'
+          npm install
+          npx e sync
+
+      - name: Configure GN build with v8 sandbox disabled
+        working-directory: electron
+        run: |
+          npx e gn -- out/Release --args='import("//electron/build/args/release.gn") v8_enable_sandbox=false is_debug=false'
 
       - name: Build Electron
         working-directory: electron
         run: |
-          ninja -C out/Release electron
+          npx e build -- out/Release electron
 
       - name: Package Electron binary
         working-directory: electron
@@ -48,7 +55,7 @@ jobs:
           mkdir -p ../electron-artifacts
           cp out/Release/electron ../electron-artifacts/electron
 
-      - name: Upload Electron binary artifact
+      - name: Upload Electron binary
         uses: actions/upload-artifact@v4
         with:
           name: electron-binary
